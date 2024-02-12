@@ -25,7 +25,6 @@ namespace FireScript
         {
             Active = true;
             this.FlameID = API.StartScriptFire(Position.X, Position.Y, Position.Z, 25, false);
-
             ParticleEffectsAsset asset = new ParticleEffectsAsset("scr_trevor3");
             await asset.Request(1000);
             Vector3 smokepos = Position;

@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Threading;
 using System.Threading.Tasks;
 using CitizenFX.Core;
 using FireScript;
@@ -11,13 +12,15 @@ using Newtonsoft.Json.Linq;
 
 namespace FivePD_StructureFireCallout;
 [Guid("EEF16B95-E19B-4B15-997E-156435FF449C")]
-[CalloutProperties("Structure Fires", "DevKilo","1.0.0")]
+[CalloutProperties("Structure Fires", "DevKilo","1.0.3")]
 public class FireCall : Callout
 {
     private JObject config = script.config;
     private JObject selectedLoc;
     private Blip alarmBoxBlip;
     private bool alarmActive = false;
+    private string integration = "None";
+    public static ExportDictionary exports;
     private void Startup()
     {
         try
@@ -27,6 +30,7 @@ public class FireCall : Callout
             CalloutDescription = (string)config["CalloutDescription"];
             ResponseCode = (int)config["ResponseCode"];
             StartDistance = (float)config["StartDistance"];
+            integration = (string)config["Integration"];
         }
         catch (Exception err)
         {
@@ -39,17 +43,22 @@ public class FireCall : Callout
         Startup();
     }
 
-    public override Task OnAccept()
+    public override async Task OnAccept()
     {
         AcceptHandler();
-        return base.OnAccept();
     }
 
     private void AcceptHandler()
     {
         ShortName = (string)config["ShortName"];
         InitBlip(75f, BlipColor.Red);
-        BaseScript.TriggerEvent("KiloFires:StartFireAtPos", Location.X, Location.Y, Location.Z, (int)selectedLoc["MaxFlames"], (int)selectedLoc["FireRadius"], false);
+        if (integration == "None")
+            BaseScript.TriggerEvent("KiloFires:StartFireAtPos", Location.X, Location.Y, Location.Z, (int)selectedLoc["MaxFlames"], (int)selectedLoc["FireRadius"], false);
+        else if (integration == "SmartFires")
+        {
+            #pragma error disable CS0656
+            exports["SmartFires"]["CreateFire"](Location, (float)selectedLoc["FireRadius"], "normal");
+        }
         alarmActive = true;
     }
 
@@ -61,7 +70,7 @@ public class FireCall : Callout
             FireAlarm(Location);
             Vector3 ogLoc = Location;
             Location = Game.PlayerPed.Position;
-            ShowNetworkedNotification("Press ~Y~ at the marked alarm box to stop the alarm!", "CHAR_CALL911",
+            ShowNetworkedNotification("Press ~y~E~s~ at the ~f~marked alarm box~s~ to stop the alarm!", "CHAR_CALL911",
                 "CHAR_CALL911", "Inner-thought", "Hint", 10f);
             Vector3 alarmBoxLocation = Utils.JSONCoordsToVector3((JObject)selectedLoc["alarmBoxCoords"]);
             alarmBoxBlip = World.CreateBlip(alarmBoxLocation);
@@ -115,14 +124,14 @@ public class FireCall : Callout
         }
     }
 
-
     private Vector3 GetLocation()
     {
         Vector3 result = Vector3.Zero;
         try
         {
             JArray locationsArray = (JArray)config["Locations"];
-            JObject location = (JObject)locationsArray.ToArray().GetValue(new Random().Next(locationsArray.Count - 1));
+            int chance = new Random().Next(locationsArray.Count);
+            JObject location = (JObject)locationsArray[chance];
             selectedLoc = location;
 
             Vector3 coordinates = Utils.JSONCoordsToVector3((JObject)location["coords"]);
@@ -145,6 +154,7 @@ public class script : BaseScript
     private List<Tuple<CoordinateParticleEffect, Vector3>> SmokeWithoutFire = new List<Tuple<CoordinateParticleEffect, Vector3>>();
     public script()
     {
+        FireCall.exports = Exports;
         config = Utils.GetConfig();
         EventHandlers["KiloFires:StartFireAtPos"] += startFire;
         EventHandlers["KiloFires:StopFireAtPos"] += stopFireAtPos;
@@ -228,4 +238,5 @@ public class script : BaseScript
             }
         }
     }
+    
 }

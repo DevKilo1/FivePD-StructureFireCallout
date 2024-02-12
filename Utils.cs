@@ -7,6 +7,7 @@ using System.Linq;
 using System.Net;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using CitizenFX.Core.Native;
 using CitizenFX.Core.NaturalMotion;
@@ -37,7 +38,6 @@ namespace FivePD_StructureFireCallout
             await RequestAnimDict(victimAnimDict);
             RequestAnimSet(suspectAnimSet);
             RequestAnimSet(victimAnimSet);
-            Debug.WriteLine("After await anims");
             // Code
             if (ped == null)
                 Debug.WriteLine("Ped is null");
@@ -124,6 +124,18 @@ namespace FivePD_StructureFireCallout
 
             return locationArray;
         }
+        public static class RandomProvider
+        {    
+            private static int seed = Environment.TickCount;
+
+            private static ThreadLocal<Random> randomWrapper = new ThreadLocal<Random>
+                (() => new Random(Interlocked.Increment(ref seed)));
+
+            public static Random GetThreadRandom()
+            {
+                return randomWrapper.Value;
+            }
+        }
         
         public static JObject GetChildFromParent(JToken parent, string name)
         {
@@ -136,7 +148,6 @@ namespace FivePD_StructureFireCallout
             {
                 string data = API.LoadResourceFile("fivepd", "callouts/KiloStructureFire/settings.json");
                 result = JObject.Parse(data);
-                Debug.WriteLine(data);
             }
             catch (Exception err)
             {
@@ -163,16 +174,10 @@ namespace FivePD_StructureFireCallout
         {
             if (!API.HasAnimDictLoaded("oddjobs@assassinate@vice@hooker"))
                 API.RequestAnimDict("oddjobs@assassinate@vice@hooker");
-            Debug.WriteLine("Requesting anim dict");
             if (!API.HasAnimSetLoaded("argue_b"))
                 API.RequestAnimSet("argue_b");
-            Debug.WriteLine("Requesting anim set");
             while (!API.HasAnimDictLoaded("oddjobs@assassinate@vice@hooker"))
                 await BaseScript.Delay(200);
-            Debug.WriteLine("Loaded anim dict");
-            
-            Debug.WriteLine("Loaded anim set");
-            Debug.WriteLine("after waiting load");
             ped.Task.ClearAllImmediately();
             ped.Task.PlayAnimation("oddjobs@assassinate@vice@hooker", "argue_b", 8f, 8f, 10000, AnimationFlags.Loop,
                 1f);
