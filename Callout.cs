@@ -21,6 +21,8 @@ public class FireCall : Callout
     private bool alarmActive = false;
     private string integration = "None";
     public static ExportDictionary exports;
+    private int AlarmSoundLengthInMilliseconds = 5000;
+    private float alarmSoundRadius = 60f;
     private void Startup()
     {
         try
@@ -31,6 +33,8 @@ public class FireCall : Callout
             ResponseCode = (int)config["ResponseCode"];
             StartDistance = (float)config["StartDistance"];
             integration = (string)config["Integration"];
+            AlarmSoundLengthInMilliseconds = (int)config["AlarmSoundLengthInMilliseconds"];
+            alarmSoundRadius = float.Parse(selectedLoc["alarmSoundRadius"].ToString());
         }
         catch (Exception err)
         {
@@ -53,7 +57,7 @@ public class FireCall : Callout
         ShortName = (string)config["ShortName"];
         InitBlip(75f, BlipColor.Red);
         if (integration == "None")
-            BaseScript.TriggerEvent("KiloFires:StartFireAtPos", Location.X, Location.Y, Location.Z, (int)selectedLoc["MaxFlames"], (int)selectedLoc["FireRadius"], false);
+            BaseScript.TriggerServerEvent("KiloNetworkFire:Sync", Location.X, Location.Y, Location.Z, (int)selectedLoc["MaxFlames"], (int)selectedLoc["FireRadius"], false);
         else if (integration == "SmartFires")
         {
             #pragma error disable CS0656
@@ -84,7 +88,7 @@ public class FireCall : Callout
 
     public override void OnCancelBefore()
     {
-        BaseScript.TriggerEvent("KiloFires:StopFireAtPos",Location.X,Location.Y,Location.Z,5f);
+        BaseScript.TriggerServerEvent("KiloNetworkFire:StopSync",Location.X,Location.Y,Location.Z,(int)selectedLoc["FireRadius"]);
         if (alarmActive)
             alarmActive = false;
         if (alarmBoxBlip != null)
@@ -95,16 +99,55 @@ public class FireCall : Callout
             
         base.OnCancelBefore();
     }
+    
+    public static async Task<bool> WaitUntilKeypressed(Control key, int timeoutAfterDuration = -1)
+    {
+        bool stillWorking = true;
+        bool pressed = false;
+        if (timeoutAfterDuration > -1)
+        {
+            var wait = new Action(async () =>
+            {
+                await BaseScript.Delay(timeoutAfterDuration);
+                stillWorking = false;
+            });
+            wait();
+        }
+            
+        while (stillWorking)
+        {
+            if (Game.IsControlJustReleased(0, key))
+            {
+                pressed = true;
+                return pressed;
+            }
+            await BaseScript.Delay(0);
+        }
+
+        return pressed;
+    }
+
+    private void HandleKeyPress()
+    {
+        if (Game.IsControlJustPressed(0, Control.Pickup))
+            alarmActive = false;
+    }
 
     private async Task WaitUntilPlayerPressesKeyAtLocation(Vector3 pos)
     {
+        bool dialogDb = false;
         Tick += async () =>
         {
             if (!alarmActive) return;
             if (Game.PlayerPed.Position.DistanceTo(pos) < 2f)
             {
-                if (Game.IsControlJustPressed(0, Control.Pickup))
-                    alarmActive = false;
+                HandleKeyPress();
+                if (!dialogDb)
+                {
+                    dialogDb = true;
+                    Utils.ShowDialog("Press ~y~E~s~ to ~r~disable the ~r~alarm~f~", 500);
+                    dialogDb = false;
+                }
             }
         };
         while (true)
@@ -119,8 +162,8 @@ public class FireCall : Callout
     {
         while (alarmActive)
         {
-            BaseScript.TriggerServerEvent("Server:SoundToRadius", Game.PlayerPed.NetworkId, 20f, "firealarm", 1f);
-            await BaseScript.Delay(250);
+            BaseScript.TriggerServerEvent("Server:SoundToCoords", pos.X, pos.Y, pos.Z, alarmSoundRadius, "firealarm", 1f);
+            await BaseScript.Delay(AlarmSoundLengthInMilliseconds);
         }
     }
 
@@ -167,7 +210,7 @@ public class script : BaseScript
         foreach (Fire f in ActiveFires.ToArray())
         {
             if (f.Active)
-                if (f.Position.DistanceTo(pos) < radius)
+                if (f.Position.DistanceTo(pos) <= radius)
                 {
                     f.Remove(false);
                     ActiveFires.Remove(f);

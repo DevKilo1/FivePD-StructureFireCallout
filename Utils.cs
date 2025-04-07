@@ -18,6 +18,13 @@ namespace FivePD_StructureFireCallout
 {
     internal class Utils
     {
+        public static async Task ShowDialog(string text, int duration = 10000, bool showImmediately = false)
+        {
+            API.BeginTextCommandPrint("STRING");
+            API.AddTextComponentString(text);
+            API.EndTextCommandPrint(duration, showImmediately);
+            await BaseScript.Delay(duration);
+        }
         public static void CalloutError(Exception err, Callout callout)
         {
             Debug.WriteLine("^3=================^2Kilo's Structure Fire Callout^3=================");
